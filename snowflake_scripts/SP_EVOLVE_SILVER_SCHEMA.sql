@@ -1,0 +1,76 @@
+CREATE OR REPLACE PROCEDURE PLC_DWH.CONFIG_SCHEMA.SP_EVOLVE_SILVER_SCHEMA("P_SOURCE_SCHEMA" VARCHAR, "P_SOURCE_TABLE" VARCHAR, "P_TARGET_SCHEMA" VARCHAR)
+RETURNS VARIANT
+LANGUAGE SQL
+EXECUTE AS CALLER
+AS '
+DECLARE
+    V_SCHEMA_SQL STRING;
+    V_WIDEN_SQL  STRING;
+    V_SQL        STRING;
+    V_ADDED      NUMBER DEFAULT 0;
+    V_WIDENED    NUMBER DEFAULT 0;
+    RS_MISSING   RESULTSET;
+    RS_WIDEN     RESULTSET;
+BEGIN
+    -- Add missing columns
+    V_SCHEMA_SQL := CONCAT(
+        ''SELECT s.COLUMN_NAME, s.DATA_TYPE, s.CHARACTER_MAXIMUM_LENGTH, s.NUMERIC_PRECISION, s.NUMERIC_SCALE '',
+        ''FROM PLC_DWH.INFORMATION_SCHEMA.COLUMNS s '',
+        ''LEFT JOIN PLC_DWH.INFORMATION_SCHEMA.COLUMNS c '',
+        ''  ON UPPER(s.COLUMN_NAME) = UPPER(c.COLUMN_NAME) '',
+        '' AND UPPER(c.TABLE_SCHEMA) = UPPER('''''', REPLACE(P_TARGET_SCHEMA, '''''''', ''''''''''''), '''''') '',
+        '' AND UPPER(c.TABLE_NAME) = UPPER('''''', REPLACE(P_SOURCE_TABLE, '''''''', ''''''''''''), '''''') '',
+        ''WHERE UPPER(s.TABLE_SCHEMA) = UPPER('''''', REPLACE(P_SOURCE_SCHEMA, '''''''', ''''''''''''), '''''') '',
+        ''  AND UPPER(s.TABLE_NAME) = UPPER('''''', REPLACE(P_SOURCE_TABLE, '''''''', ''''''''''''), '''''') '',
+        ''  AND c.COLUMN_NAME IS NULL''
+    );
+
+    RS_MISSING := (EXECUTE IMMEDIATE V_SCHEMA_SQL);
+    LET CUR_MISSING CURSOR FOR RS_MISSING;
+    FOR REC IN CUR_MISSING DO
+        LET V_COL_DEF STRING;
+        V_COL_DEF := CONCAT(''"'', REC.COLUMN_NAME, ''" '', REC.DATA_TYPE);
+        IF (UPPER(REC.DATA_TYPE) IN (''VARCHAR'', ''CHAR'', ''STRING'', ''TEXT'')) THEN
+            IF (REC.CHARACTER_MAXIMUM_LENGTH IS NOT NULL) THEN
+                V_COL_DEF := CONCAT(V_COL_DEF, ''('', REC.CHARACTER_MAXIMUM_LENGTH, '')'');
+            END IF;
+        ELSEIF (UPPER(REC.DATA_TYPE) IN (''NUMBER'', ''DECIMAL'', ''NUMERIC'')) THEN
+            IF (REC.NUMERIC_PRECISION IS NOT NULL) THEN
+                V_COL_DEF := CONCAT(V_COL_DEF, ''('', REC.NUMERIC_PRECISION, '', '', COALESCE(REC.NUMERIC_SCALE, 0), '')'');
+            END IF;
+        END IF;
+        V_SQL := CONCAT(''ALTER TABLE PLC_DWH."'', P_TARGET_SCHEMA, ''"."'', P_SOURCE_TABLE, ''" ADD COLUMN '', V_COL_DEF);
+        EXECUTE IMMEDIATE V_SQL;
+        V_ADDED := V_ADDED + 1;
+    END FOR;
+
+    -- Widen VARCHAR columns where source is now longer than target
+    V_WIDEN_SQL := CONCAT(
+        ''SELECT c.COLUMN_NAME, s.CHARACTER_MAXIMUM_LENGTH AS STG_LEN '',
+        ''FROM PLC_DWH.INFORMATION_SCHEMA.COLUMNS s '',
+        ''JOIN PLC_DWH.INFORMATION_SCHEMA.COLUMNS c '',
+        ''  ON UPPER(s.COLUMN_NAME) = UPPER(c.COLUMN_NAME) '',
+        ''WHERE UPPER(s.TABLE_SCHEMA) = UPPER('''''', REPLACE(P_SOURCE_SCHEMA, '''''''', ''''''''''''), '''''') '',
+        ''  AND UPPER(s.TABLE_NAME)   = UPPER('''''', REPLACE(P_SOURCE_TABLE, '''''''', ''''''''''''), '''''') '',
+        ''  AND UPPER(c.TABLE_SCHEMA) = UPPER('''''', REPLACE(P_TARGET_SCHEMA, '''''''', ''''''''''''), '''''') '',
+        ''  AND UPPER(c.TABLE_NAME)   = UPPER('''''', REPLACE(P_SOURCE_TABLE, '''''''', ''''''''''''), '''''') '',
+        ''  AND UPPER(s.DATA_TYPE) IN (''''TEXT'''',''''VARCHAR'''',''''CHAR'''',''''CHARACTER'''',''''STRING'''') '',
+        ''  AND UPPER(c.DATA_TYPE) IN (''''TEXT'''',''''VARCHAR'''',''''CHAR'''',''''CHARACTER'''',''''STRING'''') '',
+        ''  AND COALESCE(c.CHARACTER_MAXIMUM_LENGTH,0) < COALESCE(s.CHARACTER_MAXIMUM_LENGTH,0)''
+    );
+
+    RS_WIDEN := (EXECUTE IMMEDIATE V_WIDEN_SQL);
+    LET CUR_WIDEN CURSOR FOR RS_WIDEN;
+    FOR REC2 IN CUR_WIDEN DO
+        V_SQL := CONCAT(''ALTER TABLE PLC_DWH."'', P_TARGET_SCHEMA, ''"."'', P_SOURCE_TABLE,
+                         ''" ALTER COLUMN "'', REC2.COLUMN_NAME, ''" SET DATA TYPE VARCHAR('', REC2.STG_LEN, '')'');
+        EXECUTE IMMEDIATE V_SQL;
+        V_WIDENED := V_WIDENED + 1;
+    END FOR;
+
+    RETURN OBJECT_CONSTRUCT(''status'', ''SUCCESS'', ''added_columns'', V_ADDED, ''widened_columns'', V_WIDENED);
+EXCEPTION
+    WHEN OTHER THEN
+        RETURN OBJECT_CONSTRUCT(''status'', ''ERROR'', ''error'', SQLERRM);
+END;
+';
