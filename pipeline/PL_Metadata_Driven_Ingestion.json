@@ -164,7 +164,7 @@
 							"type": "Script",
 							"dependsOn": [
 								{
-									"activity": "Log_Extract_Success",
+									"activity": "Lookup_Source_Schema",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -187,7 +187,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'CREATE OR REPLACE TABLE PLC_DWH.BRONZE_LAYER.', item().TARGET_SNOWFLAKE_TABLE, ' ',\n    'COPY GRANTS ',\n    'USING TEMPLATE (',\n        'SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*)) ',\n        'FROM TABLE(',\n            'INFER_SCHEMA(',\n                'LOCATION=>''@PLC_DWH.CONFIG_SCHEMA.AZURE_BLOB_STAGE/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/'', ',\n                'FILE_FORMAT=>''PLC_DWH.CONFIG_SCHEMA.PARQUET_FORMAT''',\n            ')',\n        ')',\n    ');'\n)",
+											"value": "@concat(\n    'CALL PLC_DWH.CONFIG_SCHEMA.SP_CREATE_BRONZE_FROM_METADATA(',\n    '''BRONZE_LAYER'', ',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''', ',\n    'PARSE_JSON(''', string(activity('Lookup_Source_Schema').output.value), ''')',\n    ');'\n)",
 											"type": "Expression"
 										}
 									}
@@ -460,6 +460,60 @@
 								],
 								"scriptBlockExecutionTimeout": "02:00:00",
 								"treatDecimalAsString": false
+							}
+						},
+						{
+							"name": "Lookup_Source_Schema",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Log_Extract_Success",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat('\nSELECT \n    COLUMN_NAME, \n    DATA_TYPE, \n    CHARACTER_MAXIMUM_LENGTH, \n    NUMERIC_PRECISION, \n    NUMERIC_SCALE\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_SCHEMA = ''', item().SOURCE_SCHEMA_NAME, ''' \n  AND TABLE_NAME = ''', item().SOURCE_TABLE_NAME, '''\nORDER BY ORDINAL_POSITION;\n')",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_AzureSQL_DynamicSource",
+									"type": "DatasetReference",
+									"parameters": {
+										"ServerName": {
+											"value": "@pipeline().parameters.ServerName",
+											"type": "Expression"
+										},
+										"DatabaseName": {
+											"value": "@item().SOURCE_DB_NAME",
+											"type": "Expression"
+										},
+										"SchemaName": {
+											"value": "@item().SOURCE_SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "@item().SOURCE_TABLE_NAME",
+											"type": "Expression"
+										}
+									}
+								},
+								"firstRowOnly": false
 							}
 						}
 					]
