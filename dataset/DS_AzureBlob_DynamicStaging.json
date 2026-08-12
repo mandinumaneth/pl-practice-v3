@@ -1,0 +1,39 @@
+{
+	"name": "DS_AzureBlob_DynamicStaging",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_AzureBlob_Staging",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DatabaseName": {
+				"type": "string"
+			},
+			"SchemaName": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@concat(dataset().TableName, '.parquet')",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@concat(dataset().DatabaseName, '/', dataset().SchemaName, '/', dataset().TableName)",
+					"type": "Expression"
+				},
+				"container": "staging"
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

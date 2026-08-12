@@ -1,0 +1,26 @@
+{
+	"name": "LS_Snowflake_DWH",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "SnowflakeV2",
+		"typeProperties": {
+			"authenticationType": "Basic",
+			"accountIdentifier": "SPGOYUM-GQ26336",
+			"user": "MMANETH",
+			"database": "PLC_DWH",
+			"warehouse": "COMPUTE_WH",
+			"host": "SPGOYUM-GQ26336.snowflakecomputing.com",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "snowflake-pwd"
+			},
+			"useUtcTimestamps": false
+		},
+		"version": "1.1"
+	}
+}

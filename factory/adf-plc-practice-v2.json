@@ -1,0 +1,15 @@
+{
+	"name": "adf-plc-practice-v2",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true
+		}
+	},
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "df17e3a1-04aa-4174-97a0-6fdb501f55f6",
+		"tenantId": "b7561b51-aaa7-4df2-bf3b-d6387f581501"
+	}
+}

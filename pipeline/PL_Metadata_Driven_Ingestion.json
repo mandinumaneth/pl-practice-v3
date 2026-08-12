@@ -1,0 +1,521 @@
+{
+	"name": "PL_Metadata_Driven_Ingestion",
+	"properties": {
+		"activities": [
+			{
+				"name": "Set_End_Time",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "Var_Watermark_End",
+					"value": {
+						"value": "@formatDateTime(addDays(utcnow(), -1), 'yyyy-MM-dd 23:59:59.999')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Lookup_Active_Tables",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Set_End_Time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SnowflakeV2Source",
+						"query": "SELECT \n    SOURCE_DB_NAME, \n    SOURCE_SCHEMA_NAME, \n    SOURCE_TABLE_NAME, \n    TARGET_SNOWFLAKE_SCHEMA, \n    TARGET_SNOWFLAKE_TABLE,\n    STAGING_METHOD,\n    STG_CDC_COLUMN,\n    STG_CDC_FROM_DATE,\n    PRIMARY_KEY_COLUMNS\nFROM PLC_DWH.CONFIG_SCHEMA.INGESTION_CONFIG \nWHERE IS_ACTIVE = TRUE;",
+						"exportSettings": {
+							"type": "SnowflakeExportCopyCommand"
+						},
+						"treatDecimalAsString": false
+					},
+					"dataset": {
+						"referenceName": "DS_Snowflake_Config",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Active_Table",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Lookup_Active_Tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup_Active_Tables').output.value",
+						"type": "Expression"
+					},
+					"batchCount": 4,
+					"activities": [
+						{
+							"name": "Copy_Source_To_Blob",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 3,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@if(\n    equals(item().STAGING_METHOD, 'INCREMENTAL'),\n    concat('SELECT * FROM [', item().SOURCE_SCHEMA_NAME, '].[', item().SOURCE_TABLE_NAME, '] WHERE ', item().STG_CDC_COLUMN, ' > ''', item().STG_CDC_FROM_DATE, ''' AND ', item().STG_CDC_COLUMN, ' <= ''', variables('Var_Watermark_End'), ''''),\n    concat('SELECT * FROM [', item().SOURCE_SCHEMA_NAME, '].[', item().SOURCE_TABLE_NAME, ']')\n)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureSQL_DynamicSource",
+									"type": "DatasetReference",
+									"parameters": {
+										"ServerName": {
+											"value": "@pipeline().parameters.ServerName",
+											"type": "Expression"
+										},
+										"DatabaseName": {
+											"value": "@item().SOURCE_DB_NAME",
+											"type": "Expression"
+										},
+										"SchemaName": {
+											"value": "@item().SOURCE_SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "@item().SOURCE_TABLE_NAME",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureBlob_DynamicStaging",
+									"type": "DatasetReference",
+									"parameters": {
+										"DatabaseName": {
+											"value": "@item().SOURCE_DB_NAME",
+											"type": "Expression"
+										},
+										"SchemaName": {
+											"value": "@item().SOURCE_SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "@item().SOURCE_TABLE_NAME",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Deploy_And_Evolve_Schema",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Log_Extract_Success",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_DWH",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n    'CREATE OR REPLACE TABLE PLC_DWH.BRONZE_LAYER.', item().TARGET_SNOWFLAKE_TABLE, ' ',\n    'COPY GRANTS ',\n    'USING TEMPLATE (',\n        'SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*)) ',\n        'FROM TABLE(',\n            'INFER_SCHEMA(',\n                'LOCATION=>''@PLC_DWH.CONFIG_SCHEMA.AZURE_BLOB_STAGE/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/'', ',\n                'FILE_FORMAT=>''PLC_DWH.CONFIG_SCHEMA.PARQUET_FORMAT''',\n            ')',\n        ')',\n    ');'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00",
+								"treatDecimalAsString": false
+							}
+						},
+						{
+							"name": "Copy_Blob_To_Snowflake",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Deploy_And_Evolve_Schema",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "ParquetSource",
+									"storeSettings": {
+										"type": "AzureBlobStorageReadSettings",
+										"recursive": true,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "ParquetReadSettings"
+									}
+								},
+								"sink": {
+									"type": "SnowflakeV2Sink",
+									"importSettings": {
+										"type": "SnowflakeImportCopyCommand"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureBlob_DynamicStaging",
+									"type": "DatasetReference",
+									"parameters": {
+										"DatabaseName": "@item().SOURCE_DB_NAME",
+										"SchemaName": {
+											"value": "@item().SOURCE_SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "@item().SOURCE_TABLE_NAME",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_Snowflake_DynamicBronze",
+									"type": "DatasetReference",
+									"parameters": {
+										"SchemaName": {
+											"value": "@item().TARGET_SNOWFLAKE_SCHEMA",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "@item().TARGET_SNOWFLAKE_TABLE",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Advance_Watermark",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Log_Ingest_Success",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_DWH",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n    'UPDATE PLC_DWH.CONFIG_SCHEMA.INGESTION_CONFIG ',\n    'SET STG_CDC_FROM_DATE = ''', variables('Var_Watermark_End'), ''' ',\n    'WHERE SOURCE_DB_NAME = ''', item().SOURCE_DB_NAME, ''' ',\n    'AND SOURCE_SCHEMA_NAME = ''', item().SOURCE_SCHEMA_NAME, ''' ',\n    'AND SOURCE_TABLE_NAME = ''', item().SOURCE_TABLE_NAME, ''' ',\n    'AND STAGING_METHOD = ''INCREMENTAL'';'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00",
+								"treatDecimalAsString": false
+							}
+						},
+						{
+							"name": "Log_Extract_Success",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Copy_Source_To_Blob",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_DWH",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_SOURCE_TO_BLOB (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_DB_NAME, SOURCE_SCHEMA_NAME, SOURCE_TABLE_NAME, STAGING_METHOD, WATERMARK_START, WATERMARK_END, DESTINATION_BLOB_PATH, ROWS_READ_FROM_SOURCE, ROWS_WRITTEN_TO_BLOB, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''', item().SOURCE_DB_NAME, ''', ',\n    '''', item().SOURCE_SCHEMA_NAME, ''', ',\n    '''', item().SOURCE_TABLE_NAME, ''', ',\n    '''', item().STAGING_METHOD, ''', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', item().STG_CDC_FROM_DATE, ''''), 'NULL'), ', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', variables('Var_Watermark_End'), ''''), 'NULL'), ', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    activity('Copy_Source_To_Blob').output.rowsRead, ', ',\n    activity('Copy_Source_To_Blob').output.rowsCopied, ', ',\n    activity('Copy_Source_To_Blob').output.copyDuration, ', ',\n    '''SUCCESS'', NULL);'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00",
+								"treatDecimalAsString": false
+							}
+						},
+						{
+							"name": "Log_Extract_Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Copy_Source_To_Blob",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_DWH",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_SOURCE_TO_BLOB (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_DB_NAME, SOURCE_SCHEMA_NAME, SOURCE_TABLE_NAME, STAGING_METHOD, WATERMARK_START, WATERMARK_END, DESTINATION_BLOB_PATH, ROWS_READ_FROM_SOURCE, ROWS_WRITTEN_TO_BLOB, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''', item().SOURCE_DB_NAME, ''', ',\n    '''', item().SOURCE_SCHEMA_NAME, ''', ',\n    '''', item().SOURCE_TABLE_NAME, ''', ',\n    '''', item().STAGING_METHOD, ''', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', item().STG_CDC_FROM_DATE, ''''), 'NULL'), ', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', variables('Var_Watermark_End'), ''''), 'NULL'), ', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    '0, 0, 0, ',\n    '''FAILED'', ',\n    '''', replace(activity('Copy_Source_To_Blob').error.message, '''', ''''''), ''');'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00",
+								"treatDecimalAsString": false
+							}
+						},
+						{
+							"name": "Log_Ingest_Success",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Copy_Blob_To_Snowflake",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_DWH",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_BLOB_TO_BRONZE (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_BLOB_PATH, TARGET_BRONZE_TABLE, ROWS_LOADED_TO_BRONZE, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''', ',\n    activity('Copy_Blob_To_Snowflake').output.rowsCopied, ', ',\n    activity('Copy_Blob_To_Snowflake').output.copyDuration, ', ',\n    '''SUCCESS'', NULL);'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00",
+								"treatDecimalAsString": false
+							}
+						},
+						{
+							"name": "Log_Ingest_Failure",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Copy_Blob_To_Snowflake",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_Snowflake_DWH",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_BLOB_TO_BRONZE (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_BLOB_PATH, TARGET_BRONZE_TABLE, ROWS_LOADED_TO_BRONZE, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''', ',\n    '0, 0, ',\n    '''FAILED'', ',\n    '''', replace(activity('Copy_Blob_To_Snowflake').error.message, '''', ''''''), ''');'\n)",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00",
+								"treatDecimalAsString": false
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Trigger_Silver_Curation",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Active_Table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_DWH",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "@concat('CALL PLC_DWH.CONFIG_SCHEMA.SP_MAIN_SILVER_CURATION(''', pipeline().RunId, ''')')",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00",
+					"treatDecimalAsString": false
+				}
+			}
+		],
+		"parameters": {
+			"ServerName": {
+				"type": "string",
+				"defaultValue": "sqlserver-plc-practice-v2.database.windows.net"
+			}
+		},
+		"variables": {
+			"Var_Watermark_End": {
+				"type": "String"
+			}
+		},
+		"annotations": [],
+		"lastPublishTime": "2026-08-11T05:01:31Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,34 @@
+{
+	"name": "LS_AzureSQL_Source",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"DatabaseName": {
+				"type": "string",
+				"defaultValue": "PLC_CUSTOMERS_DB"
+			},
+			"ServerName": {
+				"type": "string",
+				"defaultValue": "sqlserver-plc-practice-v2.database.windows.net"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlDatabase",
+		"typeProperties": {
+			"server": "@{linkedService().ServerName}",
+			"database": "@{linkedService().DatabaseName}",
+			"encrypt": "mandatory",
+			"trustServerCertificate": false,
+			"authenticationType": "SQL",
+			"userName": "sqladmin",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "sql-admin-pwd"
+			}
+		}
+	}
+}
