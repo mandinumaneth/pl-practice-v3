@@ -235,7 +235,14 @@
 										"type": "SnowflakeImportCopyCommand"
 									}
 								},
-								"enableStaging": false,
+								"enableStaging": true,
+								"stagingSettings": {
+									"linkedServiceName": {
+										"referenceName": "LS_AzureBlob_Staging",
+										"type": "LinkedServiceReference"
+									},
+									"path": "staging-v5"
+								},
 								"translator": {
 									"type": "TabularTranslator",
 									"typeConversion": true,
