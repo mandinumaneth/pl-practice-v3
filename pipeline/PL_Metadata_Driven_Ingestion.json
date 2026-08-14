@@ -314,7 +314,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'UPDATE PLC_DWH.CONFIG_SCHEMA.INGESTION_CONFIG ',\n    'SET STG_CDC_FROM_DATE = ''', variables('Var_Watermark_End'), ''' ',\n    'WHERE SOURCE_DB_NAME = ''', item().SOURCE_DB_NAME, ''' ',\n    'AND SOURCE_SCHEMA_NAME = ''', item().SOURCE_SCHEMA_NAME, ''' ',\n    'AND SOURCE_TABLE_NAME = ''', item().SOURCE_TABLE_NAME, ''' ',\n    'AND STAGING_METHOD = ''INCREMENTAL'';'\n)",
+											"value": "@concat(\n    'UPDATE PLC_DWH_V5.CONFIG_SCHEMA.CONFIG_DATA_INTERGRATION_TABLES ',\n    'SET STAGING_CDC_FROM_DATE = ''', variables('Var_Watermark_End'), ''' ',\n    'WHERE SOURCE_DATABASE_NAME = ''', item().SOURCE_DATABASE_NAME, ''' ',\n    'AND SOURCE_TABLE_SCHEMA = ''', item().SOURCE_TABLE_SCHEMA, ''' ',\n    'AND SOURCE_TABLE_NAME = ''', item().SOURCE_TABLE_NAME, ''' ',\n    'AND STAGING_METHOD = ''INCREMENTAL'';'\n)",
 											"type": "Expression"
 										}
 									}
@@ -343,7 +343,7 @@
 							},
 							"userProperties": [],
 							"linkedServiceName": {
-								"referenceName": "LS_Snowflake_DWH",
+								"referenceName": "LS_Snowflake_DWH_V5",
 								"type": "LinkedServiceReference"
 							},
 							"typeProperties": {
@@ -351,7 +351,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_SOURCE_TO_BLOB (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_DB_NAME, SOURCE_SCHEMA_NAME, SOURCE_TABLE_NAME, STAGING_METHOD, WATERMARK_START, WATERMARK_END, DESTINATION_BLOB_PATH, ROWS_READ_FROM_SOURCE, ROWS_WRITTEN_TO_BLOB, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''', item().SOURCE_DB_NAME, ''', ',\n    '''', item().SOURCE_SCHEMA_NAME, ''', ',\n    '''', item().SOURCE_TABLE_NAME, ''', ',\n    '''', item().STAGING_METHOD, ''', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', item().STG_CDC_FROM_DATE, ''''), 'NULL'), ', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', variables('Var_Watermark_End'), ''''), 'NULL'), ', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    activity('Copy_Source_To_Blob').output.rowsRead, ', ',\n    activity('Copy_Source_To_Blob').output.rowsCopied, ', ',\n    activity('Copy_Source_To_Blob').output.copyDuration, ', ',\n    '''SUCCESS'', NULL);'\n)",
+											"value": "@concat(\n    'INSERT INTO PLC_DWH_V5.CONFIG_SCHEMA.LOG_SOURCE_TO_BLOB ',\n    '(ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_DB_NAME, SOURCE_SCHEMA_NAME, SOURCE_TABLE_NAME, STAGING_METHOD, WATERMARK_START, WATERMARK_END, DESTINATION_BLOB_PATH, ROWS_READ_FROM_SOURCE, ROWS_WRITTEN_TO_BLOB, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES ',\n    '(',\n    '''', pipeline().RunId, ''' ,',\n    '''', pipeline().Pipeline, ''' ,',\n    '''', item().SOURCE_DB_NAME, ''' ,',\n    '''', item().SOURCE_SCHEMA_NAME, ''' ,',\n    '''', item().SOURCE_TABLE_NAME, ''' ,',\n    '''', item().STAGING_METHOD, ''' ,',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', item().STAGING_CDC_FROM_DATE, ''''), 'NULL'), ', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', variables('Var_Watermark_End'), ''''), 'NULL'), ', ',\n    '''staging-v5/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '.csv'' ,',\n    activity('Copy_Source_To_Blob').output.rowsRead, ', ',\n    activity('Copy_Source_To_Blob').output.rowsCopied, ', ',\n    activity('Copy_Source_To_Blob').output.copyDuration, ', ',\n    '''SUCCESS'' ,',\n    'NULL',\n    ')'\n)",
 											"type": "Expression"
 										}
 									}
@@ -388,7 +388,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_SOURCE_TO_BLOB (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_DB_NAME, SOURCE_SCHEMA_NAME, SOURCE_TABLE_NAME, STAGING_METHOD, WATERMARK_START, WATERMARK_END, DESTINATION_BLOB_PATH, ROWS_READ_FROM_SOURCE, ROWS_WRITTEN_TO_BLOB, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''', item().SOURCE_DB_NAME, ''', ',\n    '''', item().SOURCE_SCHEMA_NAME, ''', ',\n    '''', item().SOURCE_TABLE_NAME, ''', ',\n    '''', item().STAGING_METHOD, ''', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', item().STG_CDC_FROM_DATE, ''''), 'NULL'), ', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', variables('Var_Watermark_End'), ''''), 'NULL'), ', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    '0, 0, 0, ',\n    '''FAILED'', ',\n    '''', replace(activity('Copy_Source_To_Blob').error.message, '''', ''''''), ''');'\n)",
+											"value": "@concat(\n    'INSERT INTO PLC_DWH_V5.CONFIG_SCHEMA.LOG_SOURCE_TO_BLOB ',\n    '(ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_DB_NAME, SOURCE_SCHEMA_NAME, SOURCE_TABLE_NAME, STAGING_METHOD, WATERMARK_START, WATERMARK_END, DESTINATION_BLOB_PATH, ROWS_READ_FROM_SOURCE, ROWS_WRITTEN_TO_BLOB, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES ',\n    '(',\n    '''', pipeline().RunId, ''' ,',\n    '''', pipeline().Pipeline, ''' ,',\n    '''', item().SOURCE_DB_NAME, ''' ,',\n    '''', item().SOURCE_SCHEMA_NAME, ''' ,',\n    '''', item().SOURCE_TABLE_NAME, ''' ,',\n    '''', item().STAGING_METHOD, ''' ,',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', item().STAGING_CDC_FROM_DATE, ''''), 'NULL'), ', ',\n    if(equals(item().STAGING_METHOD, 'INCREMENTAL'), concat('''', variables('Var_Watermark_End'), ''''), 'NULL'), ', ',\n    '''staging-v5/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '.csv'' ,',\n    '0, 0, 0, ',\n    '''FAILED'' ,',\n    '''', replace(activity('Copy_Source_To_Blob').error.message, '''', ''''''), '''',\n    ')'\n)",
 											"type": "Expression"
 										}
 									}
@@ -425,7 +425,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_BLOB_TO_BRONZE (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_BLOB_PATH, TARGET_BRONZE_TABLE, ROWS_LOADED_TO_BRONZE, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''', ',\n    activity('Copy_Blob_To_Snowflake').output.rowsCopied, ', ',\n    activity('Copy_Blob_To_Snowflake').output.copyDuration, ', ',\n    '''SUCCESS'', NULL);'\n)",
+											"value": "@concat(\n    'INSERT INTO PLC_DWH_V5.CONFIG_SCHEMA.LOG_BLOB_TO_BRONZE ',\n    '(ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_BLOB_PATH, TARGET_BRONZE_TABLE, ROWS_LOADED_TO_BRONZE, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES ',\n    '(',\n    '''', pipeline().RunId, ''' ,',\n    '''', pipeline().Pipeline, ''' ,',\n    '''staging-v5/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '.csv'' ,',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''' ,',\n    activity('Copy_Blob_To_Snowflake').output.rowsCopied, ', ',\n    activity('Copy_Blob_To_Snowflake').output.copyDuration, ', ',\n    '''SUCCESS'' ,',\n    'NULL',\n    ')'\n)",
 											"type": "Expression"
 										}
 									}
@@ -462,7 +462,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'INSERT INTO PLC_DWH.CONFIG_SCHEMA.LOG_BLOB_TO_BRONZE (ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_BLOB_PATH, TARGET_BRONZE_TABLE, ROWS_LOADED_TO_BRONZE, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES (',\n    '''', pipeline().RunId, ''', ',\n    '''', pipeline().Pipeline, ''', ',\n    '''staging/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '/', item().SOURCE_TABLE_NAME, '.parquet'', ',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''', ',\n    '0, 0, ',\n    '''FAILED'', ',\n    '''', replace(activity('Copy_Blob_To_Snowflake').error.message, '''', ''''''), ''');'\n)",
+											"value": "@concat(\n    'INSERT INTO PLC_DWH_V5.CONFIG_SCHEMA.LOG_BLOB_TO_BRONZE ',\n    '(ADF_PIPELINE_RUN_ID, PIPELINE_NAME, SOURCE_BLOB_PATH, TARGET_BRONZE_TABLE, ROWS_LOADED_TO_BRONZE, COPY_DURATION_SECONDS, STATUS, RAW_ERROR_MESSAGE) VALUES ',\n    '(',\n    '''', pipeline().RunId, ''' ,',\n    '''', pipeline().Pipeline, ''' ,',\n    '''staging-v5/', item().SOURCE_DB_NAME, '/', item().SOURCE_SCHEMA_NAME, '/', item().SOURCE_TABLE_NAME, '.csv'' ,',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''' ,',\n    '0, 0, ',\n    '''FAILED'' ,',\n    '''', replace(activity('Copy_Blob_To_Snowflake').error.message, '''', ''''''), '''',\n    ')'\n)",
 											"type": "Expression"
 										}
 									}
@@ -494,7 +494,7 @@
 				},
 				"userProperties": [],
 				"linkedServiceName": {
-					"referenceName": "LS_Snowflake_DWH",
+					"referenceName": "LS_Snowflake_DWH_V5",
 					"type": "LinkedServiceReference"
 				},
 				"typeProperties": {
@@ -502,7 +502,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "@concat('CALL PLC_DWH.CONFIG_SCHEMA.SP_MAIN_SILVER_CURATION(''', pipeline().RunId, ''')')",
+								"value": "@concat('CALL PLC_DWH_V5.CONFIG_SCHEMA.SP_MAIN_SILVER_CURATION(''', pipeline().RunId, ''')')",
 								"type": "Expression"
 							}
 						}
