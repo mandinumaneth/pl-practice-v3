@@ -1,0 +1,24 @@
+{
+	"name": "LS_Snowflake_DWH_V5",
+	"properties": {
+		"annotations": [],
+		"type": "SnowflakeV2",
+		"typeProperties": {
+			"authenticationType": "Basic",
+			"accountIdentifier": "SPGOYUM-GQ26336",
+			"user": "MMANETH",
+			"database": "PLC_DWH_V5",
+			"warehouse": "COMPUTE_WH",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_KeyVault",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "snowflake-pwd"
+			},
+			"useUtcTimestamps": false
+		},
+		"version": "1.1"
+	}
+}
