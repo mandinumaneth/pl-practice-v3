@@ -1,0 +1,248 @@
+{
+	"name": "PL_Extract_Metadata",
+	"properties": {
+		"activities": [
+			{
+				"name": "ForEach_Database",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@variables('DatabaseList')",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "Copy_Table_Metadata",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT \n    'PLC_PROGRESS' AS SOURCE_SYSTEM,\n    '@{item()}' AS SOURCE_DATABASE,\n    TABLE_SCHEMA AS SOURCE_SCHEMA,\n    TABLE_NAME AS TABLE_NAME,\n    TABLE_TYPE AS TABLE_TYPE,\n    NULL AS TABLE_COMMENT,\n    0 AS ROW_COUNT_EST,\n    CURRENT_TIMESTAMP AS FROM_DATE,\n    '9999-12-31' AS TO_DATE,\n    'Y' AS IS_ACTIVE,\n    CURRENT_TIMESTAMP AS EXTRACTED_AT_UTC,\n    'ADD_TABLE' AS CHANGE_TYPE,\n    NULL AS CHANGE_REASON\nFROM INFORMATION_SCHEMA.TABLES\nWHERE TABLE_TYPE = 'BASE TABLE';",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "SnowflakeV2Sink",
+									"preCopyScript": {
+										"value": "DELETE FROM PLC_DWH_V5.CONFIG_SCHEMA.SOURCE_TABLE_METADATA WHERE SOURCE_DATABASE = '@{item()}';",
+										"type": "Expression"
+									},
+									"importSettings": {
+										"type": "SnowflakeImportCopyCommand"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureSQL_DynamicSource",
+									"type": "DatasetReference",
+									"parameters": {
+										"ServerName": {
+											"value": "@pipeline().parameters.ServerName",
+											"type": "Expression"
+										},
+										"DatabaseName": {
+											"value": "@item()",
+											"type": "Expression"
+										},
+										"SchemaName": {
+											"value": "INFORMATION_SCHEMA",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "TABLES",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_Snowflake_DynamicBronze_V5",
+									"type": "DatasetReference",
+									"parameters": {
+										"SchemaName": {
+											"value": "CONFIG_SCHEMA",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "SOURCE_COLUMN_METADATA",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Copy_Column_Metadata",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Copy_Table_Metadata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT \n    'PLC_PROGRESS' AS SOURCE_SYSTEM,\n    '@{item()}' AS SOURCE_DATABASE,\n    TABLE_SCHEMA AS SOURCE_SCHEMA,\n    TABLE_NAME AS TABLE_NAME,\n    COLUMN_NAME AS COLUMN_NAME,\n    ORDINAL_POSITION AS ORDINAL_POSITION,\n    DATA_TYPE AS DATA_TYPE,\n    CHARACTER_MAXIMUM_LENGTH AS DATA_LENGTH,\n    NUMERIC_PRECISION AS DATA_PRECISION,\n    NUMERIC_SCALE AS DATA_SCALE,\n    IS_NULLABLE AS NULLABLE,\n    'N' AS PRIMARY_KEY_FLAG,\n    DATA_TYPE AS RAW_TYPE,\n    CURRENT_TIMESTAMP AS FROM_DATE,\n    '9999-12-31' AS TO_DATE,\n    'Y' AS IS_ACTIVE,\n    CURRENT_TIMESTAMP AS EXTRACTED_AT_UTC,\n    'ADD_COLUMN' AS CHANGE_TYPE,\n    NULL AS RENAMED_TO,\n    NULL AS RENAMED_FROM,\n    NULL AS CHANGE_REASON\nFROM INFORMATION_SCHEMA.COLUMNS;",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "SnowflakeV2Sink",
+									"preCopyScript": {
+										"value": "DELETE FROM PLC_DWH_V5.CONFIG_SCHEMA.SOURCE_COLUMN_METADATA WHERE SOURCE_DATABASE = '@{item()}';",
+										"type": "Expression"
+									},
+									"importSettings": {
+										"type": "SnowflakeImportCopyCommand"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_AzureSQL_DynamicSource",
+									"type": "DatasetReference",
+									"parameters": {
+										"ServerName": {
+											"value": "@pipeline().parameters.ServerName",
+											"type": "Expression"
+										},
+										"DatabaseName": {
+											"value": "@item()",
+											"type": "Expression"
+										},
+										"SchemaName": {
+											"value": "INFORMATION_SCHEMA",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "COLUMNS",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_Snowflake_DynamicBronze_V5",
+									"type": "DatasetReference",
+									"parameters": {
+										"SchemaName": {
+											"value": "CONFIG_SCHEMA",
+											"type": "Expression"
+										},
+										"TableName": {
+											"value": "SOURCE_COLUMN_METADATA",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Sync_Master_Config",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Database",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_Snowflake_DWH_V5",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "CALL PLC_DWH_V5.CONFIG_SCHEMA.SP_SYNC_INTEGRATION_CONFIG();",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00",
+					"treatDecimalAsString": false
+				}
+			}
+		],
+		"parameters": {
+			"ServerName": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"DatabaseList": {
+				"type": "Array",
+				"defaultValue": [
+					"PLC_CUSTOMERS_DB",
+					"PLC_TRANSACTIONS_DB",
+					"PLC_LOANS_DB"
+				]
+			}
+		},
+		"annotations": []
+	}
+}

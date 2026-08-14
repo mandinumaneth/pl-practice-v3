@@ -1,0 +1,44 @@
+{
+	"name": "DS_AzureBlob_DynamicStaging_CSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_AzureBlob_Staging",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DatabaseName": {
+				"type": "string"
+			},
+			"SchemaName": {
+				"type": "string"
+			},
+			"TableName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": {
+					"value": "@concat(dataset().TableName, '.csv')",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@concat(dataset().DatabaseName, '/', dataset().SchemaName, '/', dataset().TableName)",
+					"type": "Expression"
+				},
+				"container": {
+					"value": "staging-v5",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}

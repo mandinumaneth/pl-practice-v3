@@ -41,7 +41,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "SnowflakeV2Source",
-						"query": "SELECT \n    SOURCE_DB_NAME, \n    SOURCE_SCHEMA_NAME, \n    SOURCE_TABLE_NAME, \n    TARGET_SNOWFLAKE_SCHEMA, \n    TARGET_SNOWFLAKE_TABLE,\n    STAGING_METHOD,\n    STG_CDC_COLUMN,\n    STG_CDC_FROM_DATE,\n    PRIMARY_KEY_COLUMNS\nFROM PLC_DWH.CONFIG_SCHEMA.INGESTION_CONFIG \nWHERE IS_ACTIVE = TRUE;",
+						"query": "SELECT \n    SOURCE_SYSTEM_ID,\n    SOURCE_DATABASE_NAME,\n    SOURCE_TABLE_SCHEMA,\n    SOURCE_TABLE_NAME,\n    STAGING_METHOD\nFROM PLC_DWH_V5.CONFIG_SCHEMA.CONFIG_DATA_INTERGRATION_TABLES\nWHERE IS_STAGING_TABLE_ACTIVE = TRUE;",
 						"exportSettings": {
 							"type": "SnowflakeExportCopyCommand"
 						},
@@ -96,12 +96,14 @@
 									"partitionOption": "None"
 								},
 								"sink": {
-									"type": "ParquetSink",
+									"type": "DelimitedTextSink",
 									"storeSettings": {
 										"type": "AzureBlobStorageWriteSettings"
 									},
 									"formatSettings": {
-										"type": "ParquetWriteSettings"
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
 									}
 								},
 								"enableStaging": false,
@@ -140,7 +142,7 @@
 							],
 							"outputs": [
 								{
-									"referenceName": "DS_AzureBlob_DynamicStaging",
+									"referenceName": "DS_AzureBlob_DynamicStaging_CSV",
 									"type": "DatasetReference",
 									"parameters": {
 										"DatabaseName": {
@@ -164,7 +166,7 @@
 							"type": "Script",
 							"dependsOn": [
 								{
-									"activity": "Lookup_Source_Schema",
+									"activity": "Log_Extract_Success",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -179,7 +181,7 @@
 							},
 							"userProperties": [],
 							"linkedServiceName": {
-								"referenceName": "LS_Snowflake_DWH",
+								"referenceName": "LS_Snowflake_DWH_V5",
 								"type": "LinkedServiceReference"
 							},
 							"typeProperties": {
@@ -187,7 +189,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "@concat(\n    'CALL PLC_DWH.CONFIG_SCHEMA.SP_CREATE_BRONZE_FROM_METADATA(',\n    '''BRONZE_LAYER'', ',\n    '''', item().TARGET_SNOWFLAKE_TABLE, ''', ',\n    'PARSE_JSON(''', string(activity('Lookup_Source_Schema').output.value), ''')',\n    ');'\n)",
+											"value": "@concat('CALL PLC_DWH_V5.CONFIG_SCHEMA.SP_CREATE_BRONZE_FROM_METADATA(''', item().SOURCE_DATABASE_NAME, ''', ''', item().SOURCE_TABLE_SCHEMA, ''', ''', item().SOURCE_TABLE_NAME, ''');')",
 											"type": "Expression"
 										}
 									}
@@ -217,14 +219,14 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "ParquetSource",
+									"type": "DelimitedTextSource",
 									"storeSettings": {
 										"type": "AzureBlobStorageReadSettings",
 										"recursive": true,
 										"enablePartitionDiscovery": false
 									},
 									"formatSettings": {
-										"type": "ParquetReadSettings"
+										"type": "DelimitedTextReadSettings"
 									}
 								},
 								"sink": {
@@ -245,10 +247,13 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "DS_AzureBlob_DynamicStaging",
+									"referenceName": "DS_AzureBlob_DynamicStaging_CSV",
 									"type": "DatasetReference",
 									"parameters": {
-										"DatabaseName": "@item().SOURCE_DB_NAME",
+										"DatabaseName": {
+											"value": "@item().SOURCE_DATABASE_NAME",
+											"type": "Expression"
+										},
 										"SchemaName": {
 											"value": "@item().SOURCE_SCHEMA_NAME",
 											"type": "Expression"
@@ -262,15 +267,12 @@
 							],
 							"outputs": [
 								{
-									"referenceName": "DS_Snowflake_DynamicBronze",
+									"referenceName": "DS_Snowflake_DynamicBronze_V5",
 									"type": "DatasetReference",
 									"parameters": {
-										"SchemaName": {
-											"value": "@item().TARGET_SNOWFLAKE_SCHEMA",
-											"type": "Expression"
-										},
+										"SchemaName": "@item().SOURCE_TABLE_SCHEMA",
 										"TableName": {
-											"value": "@item().TARGET_SNOWFLAKE_TABLE",
+											"value": "@item().SOURCE_TABLE_NAME",
 											"type": "Expression"
 										}
 									}
@@ -460,60 +462,6 @@
 								],
 								"scriptBlockExecutionTimeout": "02:00:00",
 								"treatDecimalAsString": false
-							}
-						},
-						{
-							"name": "Lookup_Source_Schema",
-							"type": "Lookup",
-							"dependsOn": [
-								{
-									"activity": "Log_Extract_Success",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "AzureSqlSource",
-									"sqlReaderQuery": {
-										"value": "@concat('\nSELECT \n    COLUMN_NAME, \n    DATA_TYPE, \n    CHARACTER_MAXIMUM_LENGTH, \n    NUMERIC_PRECISION, \n    NUMERIC_SCALE\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_SCHEMA = ''', item().SOURCE_SCHEMA_NAME, ''' \n  AND TABLE_NAME = ''', item().SOURCE_TABLE_NAME, '''\nORDER BY ORDINAL_POSITION;\n')",
-										"type": "Expression"
-									},
-									"queryTimeout": "02:00:00",
-									"partitionOption": "None"
-								},
-								"dataset": {
-									"referenceName": "DS_AzureSQL_DynamicSource",
-									"type": "DatasetReference",
-									"parameters": {
-										"ServerName": {
-											"value": "@pipeline().parameters.ServerName",
-											"type": "Expression"
-										},
-										"DatabaseName": {
-											"value": "@item().SOURCE_DB_NAME",
-											"type": "Expression"
-										},
-										"SchemaName": {
-											"value": "@item().SOURCE_SCHEMA_NAME",
-											"type": "Expression"
-										},
-										"TableName": {
-											"value": "@item().SOURCE_TABLE_NAME",
-											"type": "Expression"
-										}
-									}
-								},
-								"firstRowOnly": false
 							}
 						}
 					]
