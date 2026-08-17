@@ -97,7 +97,7 @@
 											"type": "Expression"
 										},
 										"TableName": {
-											"value": "SOURCE_COLUMN_METADATA",
+											"value": "SOURCE_TABLE_METADATA",
 											"type": "Expression"
 										}
 									}
