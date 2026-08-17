@@ -262,7 +262,7 @@
 											"type": "Expression"
 										},
 										"SchemaName": {
-											"value": "@item().SOURCE_SCHEMA_NAME",
+											"value": "@item().SOURCE_TABLE_SCHEMA",
 											"type": "Expression"
 										},
 										"TableName": {
