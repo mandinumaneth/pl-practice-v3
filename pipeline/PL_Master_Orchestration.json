@@ -15,7 +15,13 @@
 						"referenceName": "PL_Extract_Metadata",
 						"type": "PipelineReference"
 					},
-					"waitOnCompletion": true
+					"waitOnCompletion": true,
+					"parameters": {
+						"ServerName": {
+							"value": "@pipeline().parameters.ServerName",
+							"type": "Expression"
+						}
+					}
 				}
 			},
 			{
@@ -38,10 +44,22 @@
 						"referenceName": "PL_Metadata_Driven_Ingestion",
 						"type": "PipelineReference"
 					},
-					"waitOnCompletion": true
+					"waitOnCompletion": true,
+					"parameters": {
+						"ServerName": {
+							"value": "@pipeline().parameters.ServerName",
+							"type": "Expression"
+						}
+					}
 				}
 			}
 		],
+		"parameters": {
+			"ServerName": {
+				"type": "string",
+				"defaultValue": "sqlserver-plc-practice-v2.database.windows.net"
+			}
+		},
 		"annotations": []
 	}
 }

@@ -244,7 +244,8 @@
 		],
 		"parameters": {
 			"ServerName": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "sqlserver-plc-practice-v2.database.windows.net"
 			}
 		},
 		"variables": {
