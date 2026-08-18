@@ -14,7 +14,7 @@
 				"type": "Expression"
 			},
 			"table": {
-				"value": "INGESTION_CONFIG",
+				"value": "CONFIG_DATA_INTERGRATION_TABLES",
 				"type": "Expression"
 			}
 		}
