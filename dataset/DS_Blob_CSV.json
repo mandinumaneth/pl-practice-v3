@@ -1,0 +1,23 @@
+{
+	"name": "DS_Blob_CSV",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AzureBlobStorageTest",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "final_test_data.csv",
+				"container": "csvtest"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}
