@@ -4,10 +4,12 @@ CREATE OR REPLACE TABLE PLC_DWH_V5.CONFIG_SCHEMA.DATA_PIPELINE_TABLE_LOG
        IDENTIFIERS
        ========================================================= */
     LOG_ID                   VARCHAR DEFAULT UUID_STRING(),
+    BUSINESS_DATE            DATE,     
     END_TO_END_RUN_ID        VARCHAR,
     ADF_PIPELINE_RUN_ID      VARCHAR,
     CURATION_RUN_ID          VARCHAR,
  
+    PIPELINE_ID              VARCHAR,  
     PIPELINE_NAME            VARCHAR,
     SOURCE_SYSTEM_ID         VARCHAR,
  
